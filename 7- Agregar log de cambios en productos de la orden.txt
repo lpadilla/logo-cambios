@@ -1,0 +1,415 @@
+Agregar Registro log de cambios en productos de la order(Descuentos y devoluciones)
+
+1- Crear la tabla de base de datos, con el siguiente script
+	CREATE TABLE `ps_history_change` (
+	  `id` int(15) UNSIGNED NOT NULL,
+	  `id_employee` int(15) NOT NULL,
+	  `id_order` int(15) NOT NULL,
+	  `id_product` int(15) NOT NULL,
+	  `date_add` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+	  `Qty` int(30) NOT NULL,
+	  `Type` varchar(50) DEFAULT NULL
+	  `reason` int(15) UNSIGNED NOT NULL,
+	) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+	CREATE TABLE `ps_history_change_reasons` (
+	  `id` int(15) UNSIGNED NOT NULL,
+	  `reason` varchar(500) DEFAULT NULL,
+	  `type_reason` int(5) DEFAULT  NULL
+	) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+	INSERT INTO `ps_history_change_reasons`(`id`, `reason`, `type_reason`) VALUES 
+	(1, "Solicitud del cliente", 1),
+	(2, "Error en Carga de OC", 1),
+	(3, "Nota de Crédito", 1),
+	(4, "Diferencia de Inventario", 1),
+	(5, "Corta fecha de Caducidad", 1),
+	(6, "Producto Dañado", 1),
+	(7, "Liberación Stock Reserva", 1),
+	(8, "Otro", 1);
+	(9, "Acuerdo comercial", 2),
+	(10, "Solicitud gerencial", 2),
+	(11, "Descuento de precio", 2),
+	(12, "Otro", 2);
+
+	--
+	-- Indices de la tabla `ps_history_change`
+	--
+	ALTER TABLE `ps_history_change`
+	  ADD PRIMARY KEY (`id`);
+
+	--
+	-- AUTO_INCREMENT de la tabla `ps_history_change`
+	--
+	ALTER TABLE `ps_history_change`
+	  MODIFY `id` int(15) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+	COMMIT;
+
+
+	--
+	-- Indices de la tabla `ps_history_change_reasons`
+	--
+	ALTER TABLE `ps_history_change_reasons`
+	  ADD PRIMARY KEY (`id`);
+
+	--
+	-- AUTO_INCREMENT de la tabla `ps_history_change_reasons`
+	--
+	ALTER TABLE `ps_history_change_reasons`
+	  MODIFY `id` int(15) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+	COMMIT;
+
+2- Ajustes en Archivo de css del backoffice
+	/panel/themes/default/css/overrides.css
+
+		#HistoryChangeModal thead>tr>th{
+		    text-align:center;
+		    font-size: 16px;
+		    font-weight: bold;
+		}
+		@media (min-width: 768px){
+		    #HistoryChangeModal > .modal-dialog{
+		        width: 90%;
+		    }
+		}
+
+3- Ajustes en el Archivo orders.js 
+	ubicado en /store/js/admin/
+	Agregar el siguiente codigo dentro de un document.ready
+	Lineas 130 - 151
+		//Historial de cambios devoluciones (en cantidad de productos)
+	    $('#cancelProduct_submit').attr('disabled', true);
+	    $('#ReturnProducts select').on('change', function() {
+	      $("#devolution_motivo").val(this.value);
+	      if($("#devolution_motivo").val() != 0){
+	    		$('#cancelProduct_submit').attr('disabled', false);
+	      }else{
+	    		$('#cancelProduct_submit').attr('disabled', true);
+	      }
+	    });
+	    
+	    
+	    //Historial de cambios descuentos (en %)
+	    $('#discountProduct_submit').attr('disabled', true);
+	    $('#DiscountProduct select').on('change', function() {
+	      $("#discount_motivo").val(this.value);
+	      if($("#discount_motivo").val() != 0){
+	    		$('#discountProduct_submit').attr('disabled', false);
+	      }else{
+	    		$('#discountProduct_submit').attr('disabled', true);
+	      }
+	    });
+
+4- Cambios archivo AdminOrderController.php para guardar en BD tabla ps_history_change y enviar correo con el cambio
+
+	Devolucion:
+		//INSERT EN TABLA HISTORY_CHANGE
+			Lineas 1897-1919
+	      $this->context =Context::getContext() ;
+	      $employee_id = $this->context->employee->id; 
+	      $date_add = date('Y-m-d H:i:s');
+	      
+	      //Trae el nombre del motivo de la devolucion de la tabla history_change_reasons
+	      $reason_get = Tools::getValue('devolution_motivo');      
+	      $sql_history_reason = 'SELECT reason FROM '._DB_PREFIX_.'history_change_reasons WHERE id = '.$reason_get;
+	      $reason_data= Db::getInstance()->ExecuteS($sql_history_reason);
+	      $reason_name = $reason_data[0]['reason'];
+
+				//Sql del Insert en la tabla history_change                                
+	      $sql_history = 'INSERT INTO '._DB_PREFIX_.'history_change(id_employee, id_order, id_product, Type, reason, Qty, date_add) VALUES('.$employee_id.', '.$order->id.','.$order_detail->product_id.', "Devolución","'.$reason_get.'",'.$qtyList[$key].', \''.$date_add.'\')';
+	           
+	      //Se arma el HTML para el envío del correo                     
+	      $html .= "  <tr style='text-align:center;'> 
+		  	              <td style='border: 1px solid black;border-collapse: collapse;padding-left:5px;padding-right:5px;'>".$order_detail->product_id."</td>
+		  	              <td style='border: 1px solid black;border-collapse: collapse;padding-left:5px;padding-right:5px;'>".$order_detail->product_name."</td>
+		  	              <td style='border: 1px solid black;border-collapse: collapse;padding-left:5px;padding-right:5px;'>".$qtyList[$key]."</td>
+		  	              <td style='border: 1px solid black;border-collapse: collapse;padding-left:5px;padding-right:5px;'>-</td>
+		  	              <td style='border: 1px solid black;border-collapse: collapse;padding-left:5px;padding-right:5px;'>Devolución: ".$reason_name."</td>
+		  	          	</tr>";
+			
+		//ENVÍO DE CORREO	
+			Lineas 
+				* 1882: Declaracion de variable html vacia --> $html = ""; Antes del foreach de productos
+	  		* 1932-1945: Crear variables para correo
+          //SEND MAIL HISTORY CHANGE DEVOLUTION PRODUCT
+          $this->context =Context::getContext() ;
+          $employee_name = $this->context->employee->firstname." ".$this->context->employee->lastname;
+          $date_add = date('d-m-Y H:i:s');   
+          $templateVars = array(
+              '{html_data}' => $html,
+              '{date_add}' => $date_add,
+              '{order_id}' => $order->id,
+              '{employee_name}' => $employee_name
+          );            
+                          
+          $mails_to=array("lcpc27@gmail.com");
+          //$mails_to=array("lcpc27@gmail.com", "camilo@grupologo.cl");
+        * 2140 - 2142: Se ejecuta el sql y envio del correo si no hay errores de validacion
+       		Db::getInstance()->Execute($sql_history);
+          @Mail::Send(1, 'history_change_log', Mail::l('Cambios en productos de una orden', 1), $templateVars, $mails_to, null, null, null, null, null, _PS_MAIL_DIR_, true, 1, 'lcpc27@gmail.com');                  
+                              
+	Descuentos: 
+		//INSERT EN TABLA HISTORY_CHANGE
+			Lineas 1771-1791
+		    //INSERT EN TABLA HISTORY_CHANGE
+        $this->context =Context::getContext() ;
+        $employee_id = $this->context->employee->id; 
+        $date_add = date('Y-m-d H:i:s');
+
+        //Trae el nombre del motivo de la devolucion de la tabla history_change_reasons
+        $reason_get = Tools::getValue('discount_motivo');
+        $sql_history_reason = 'SELECT reason FROM '._DB_PREFIX_.'history_change_reasons WHERE id = '.$reason_get;        
+        $reason_data= Db::getInstance()->ExecuteS($sql_history_reason);
+        $reason_name = $reason_data[0]['reason'];
+        
+        //Sql del Insert en la tabla history_change
+        $sql_history = 'INSERT INTO '._DB_PREFIX_.'history_change(id_employee, id_order, id_product, Type, reason, Qty, date_add) VALUES('.$employee_id.', '.$order->id.','.$order_detail->product_id.', "Descuento","'.$reason_get.'",'.$discountList[$key].', \''.$date_add.'\')';
+				
+				//Se arma el HTML para el envío del correo                                 
+        $html .= "  <tr style='text-align:center;'> 
+                      <td style='border: 1px solid black;border-collapse: collapse;padding-left:5px;padding-right:5px;'>".$order_detail->product_id."</td>
+                      <td style='border: 1px solid black;border-collapse: collapse;padding-left:5px;padding-right:5px;'>".$order_detail->product_name."</td>
+                      <td style='border: 1px solid black;border-collapse: collapse;padding-left:5px;padding-right:5px;'>-</td>
+                      <td style='border: 1px solid black;border-collapse: collapse;padding-left:5px;padding-right:5px;'>".$discountList[$key]."%</td>
+                      <td style='border: 1px solid black;border-collapse: collapse;padding-left:5px;padding-right:5px;'>Descuento: ".$reason_name."</td>
+                  </tr>";
+
+		//ENVÍO DE CORREO
+		  Lineas 
+		  	* 1760: Declaracion de variable html vacia --> $html = ""; Antes del foreach de productos
+		  	* 1795-1809: Crear variables para correo
+		  			//SEND MAIL HISTORY CHANGE DISCOUNT IN PRODUCT
+            $this->context =Context::getContext() ;
+            $employee_name = $this->context->employee->firstname." ".$this->context->employee->lastname;
+            
+            $date_add = date('d-m-Y H:i:s');    
+            $templateVars = array(
+                '{html_data}' => $html,
+                '{date_add}' => $date_add,
+                '{order_id}' => $order->id,
+                '{employee_name}' => $employee_name
+            );           
+            
+            $mails_to=array("lcpc27@gmail.com", "camilo@grupologo.cl");
+            //$mails_to=array("lcpc27@gmail.com");
+
+	      * 1826-1827: Se ejecuta el sql y envio del correo si no hay errores de validacion
+	        Db::getInstance()->Execute($sql_history);
+          @Mail::Send(1, 'history_change_log', Mail::l('Cambios en productos de una orden', 1), $templateVars, $mails_to, null, null, null, null, null, _PS_MAIL_DIR_, true, 1, 'lcpc27@gmail.com');
+                        
+
+  Archivo platilla de correo se llama "history_change_log.html" y esta en la ruta: 
+  /mails/es/history_change_log.html
+
+5- Mostrar en backoffice el historial de cambios de la orden
+	- Archivo AdminOrderController.php
+		Ruta: /controllers/admin/AdminOrdersController.php
+		Lineas 2847 - 2872
+			//SELECT a tabla history_change
+        $query_history_change = '   SELECT hc.id, hc.id_product, pl.name, CONCAT(e.firstname, " " , e.lastname) AS employee_name, hc.qty, hc.type, hc.date_add, hcr.reason
+                                    FROM '._DB_PREFIX_.'history_change AS hc, 
+                                         '._DB_PREFIX_.'employee AS e,
+                                         '._DB_PREFIX_.'product_lang AS pl,
+                                         '._DB_PREFIX_.'history_change_reasons AS hcr
+                                    WHERE 	id_order = '.(int)Tools::getValue('id_order').'
+                                    		AND e.id_employee = hc.id_employee
+                                            AND pl.id_product = hc.id_product
+                                            AND hc.reason = hcr.id
+                                            AND pl.id_lang = 1
+                                    GROUP BY hc.id
+                                ';
+				$history_change_data = Db::getInstance()->ExecuteS($query_history_change);
+			
+			//Arreglar datos en array para enviar a la vista
+				$data_history_change_arr=array();
+				foreach ($history_change_data as $row_data){
+			    $temp_arr= array(
+            'id' => $row_data['id'],
+            'id_product' => $row_data['id_product'],
+            'name' => $row_data['name'],
+            'employee_name' => $row_data['employee_name'],
+            'qty' => $row_data['qty'],
+            'type' => $row_data['type'],
+            'reason' => $row_data['reason'],
+            'date_add' => $row_data['date_add']
+			    );
+			    array_push($data_history_change_arr,$temp_arr);
+				}
+		
+			//SELECT a tabla history_change_reasons
+				$query_history_change_reasons = 'SELECT * FROM '._DB_PREFIX_.'history_change_reasons';
+				$history_change_reasons_data = Db::getInstance()->ExecuteS($query_history_change_reasons);
+			
+			//Arreglar datos en array para enviar a la vista
+				//variables separadas para tipos de motivos de devolucion y de descuento
+        $data_history_change_reasons_arr_dev = array();	//array para devolucion
+        $data_history_change_reasons_arr_dis = array();	//array para descuento
+				foreach ($history_change_reasons_data as $row_data_1){
+				    $temp_arr_1= array(
+			            'id' => $row_data_1['id'],
+			            'reason' => $row_data_1['reason']
+				    );
+				    if($row_data_1['Type_reason']==1){
+				        array_push($data_history_change_reasons_arr_dev,$temp_arr_1);
+				    }else{
+				        array_push($data_history_change_reasons_arr_dis,$temp_arr_1);
+				        
+				    }
+				}
+
+		Lineas 2952 - 2954
+			// Envio de variables con datos a la vista
+			'history_change' => $data_history_change_arr,
+      'history_change_reasons_dev' => $data_history_change_reasons_arr_dev,
+      'history_change_reasons_dis' => $data_history_change_reasons_arr_dis,
+
+	-Archivo view.tpl 
+		Ruta: /panel/themes/default/template/controllers/orders/helpers/view/view.tpl
+		Lineas 1424 - 1426(Test) y Lineas 1235 - 1237 (Prod): Botton para levantar popup con listado de cambios
+				{if $history_change|@count > 0}
+						    <button type="button" class="btn btn-warning" data-toggle="modal" data-target="#HistoryChangeModal"><span class="icon-info"></span> Historial de cambios</button>
+				{/if}						
+		Lineas 1429-1484 (Test) y Lineas 1240-1295(Prod): Modal del listado de cambios
+			<!-- Modal -->
+				<div class="modal fade" id="HistoryChangeModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+						  <div class="modal-dialog modal-dialog-centered" role="document">
+						    <div class="modal-content">
+						      <div class="modal-header">
+						        <h3 class="modal-title text-center" id="exampleModalLabel"><strong>Historial de Cambios en pedido {$order->id}</strong></h3>
+						        <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="
+						    padding: 1rem;
+						    margin: -3rem -1rem -1rem auto;
+							">
+						          <span aria-hidden="true">&times;</span>
+						        </button>
+						      </div>
+						      <div class="modal-body">
+									<table class="table">
+									  <thead>
+									    <tr style="text-align:center;">
+									      <th scope="col">Id producto</th>
+									      <th scope="col">Nombre de producto</th>
+									      <th scope="col">Motivo</th>
+									      <th scope="col">Empleado</th>
+									      <th scope="col">Cantidad devuelta</th>
+									      <th scope="col">% de descuento</th>
+									      <th scope="col">Fecha</th>
+									    </tr>
+									  </thead>
+									  <tbody>
+									  	{foreach from=$history_change item=data_history}	
+										    <tr style="text-align:center;">
+										      <td>{$data_history['id_product']}</th>
+										      <td>{$data_history['name']}</td>
+										      <td>{$data_history['type']}
+										        {if $data_history['reason'] != null}
+										            : {$data_history['reason']}
+										        {/if}
+										      </td>
+										      <td>{$data_history['employee_name']}</td>
+										      {if $data_history['type'] == 'Devolución'}
+												      <td>{$data_history['qty']}</td>
+												      <td>-</td>
+										      {else}
+										          <td>-</td>
+										          <td>{$data_history['qty']} %</td>
+										      {/if}
+										      <td>{$data_history['date_add']}</td>
+										    </tr>
+									  	{/foreach}
+
+									  </tbody>
+									</table>
+						      </div>
+						      <div class="modal-footer">
+						      </div>
+						    </div>
+						  </div>
+				</div>
+
+		DESCUENTOS
+			//Boton de descuento, trigger del modal de seleccion de motivo
+				-Linea 1790 (Test) y Linea 1590(Prod)
+					<button type="button" class="btn btn-default" data-toggle="modal" data-target="#DiscountProduct">Aplicar descuento</button>
+			//Modal de eleccion de motivo y submit
+				-Lineas 1792 - 1820 (Test) y Lineas 1592 - 1620 (Prod)
+					<div class="modal fade" id="DiscountProduct" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+            				  <div class="modal-dialog modal-dialog-centered" role="document">
+            				    <div class="modal-content">
+            				      <div class="modal-header">
+            				        <h4 class="modal-title" id="exampleModalLabel">¿Cúal es el motivo del descuento?</h4>
+            				        <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="
+            				    padding: 1rem;
+            				    margin: -3rem -1rem -1rem auto;
+            					">
+            				          <span aria-hidden="true">&times;</span>
+            				        </button>
+            				      </div>
+            				      <div class="modal-body">
+            				      	<input id="discount_motivo" type="hidden" name="discount_motivo">
+            				      	<select name="discoun_motivo_select" id="discoun_motivo_select" class="">
+        								<option value="0">Seleccione una opción</option>
+        								{foreach from=$history_change_reasons_dis item=reason}
+        									<option value="{$reason['id']}">{$reason['reason']}</option>
+        								{/foreach}
+        							</select>
+            				      </div>
+            				      <div class="modal-footer">
+            				          <button type="button" class="btn btn-default" data-dismiss="modal" aria-label="Close">Cerrar sin guardar</button>
+            				      	  <input id="discountProduct_submit" type="submit" name="discountProduct" value="Guardar"
+            							class="btn btn-success" />
+            				      </div>
+            				    </div>
+            				  </div>
+            				</div>
+
+		DEVOLUCIOON
+			//Boton de devolución, trigger del modal de seleccion de motivo
+				Lineas 1891 - 1899 (Test) y Lineas 1691 - 1699 (Prod)
+					<button type="button" class="btn btn-default" data-toggle="modal" data-target="#ReturnProducts">
+					{if $order->hasBeenDelivered()}
+						{l s='Return products'}
+					{elseif $order->hasBeenPaid()}
+						{l s='Refund products'}
+					{else}
+						{l s='Return products'}
+					{/if}
+					</button>
+			//Modal de eleccion de motivo y submit
+				Lineas 1912 - 1944 (Test) y Lineas 1712 - 1744 (Prod)
+					<div class="modal fade" id="ReturnProducts" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+            				  <div class="modal-dialog modal-dialog-centered" role="document">
+            				    <div class="modal-content">
+            				      <div class="modal-header">
+            				        <h4 class="modal-title" id="exampleModalLabel">¿Cúal es el motivo de la devolución?</h4>
+            				        <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="
+            				    padding: 1rem;
+            				    margin: -3rem -1rem -1rem auto;
+            					">
+            				          <span aria-hidden="true">&times;</span>
+            				        </button>
+            				      </div>
+            				      <div class="modal-body">
+            				      	<input id="devolution_motivo" type="hidden" name="devolution_motivo">
+            				      	
+            				      	<select name="devolution_motivo_select" id="devolution_motivo_select" class="">
+        								<option value="0">Seleccione una opción</option>
+        								{foreach from=$history_change_reasons_dev item=reason}
+        									<option value="{$reason['id']}">{$reason['reason']}</option>
+        								{/foreach}
+        							</select>
+            				      	
+            				      	
+            				      	
+            				      </div>
+            				      <div class="modal-footer">
+            				          <button type="button" class="btn btn-default" data-dismiss="modal" aria-label="Close">Cerrar sin guardar</button>
+            				      	  <input id="cancelProduct_submit" type="submit" name="cancelProduct" value="Guardar"
+            							class="btn btn-success" />
+            				      </div>
+            				    </div>
+            				  </div>
+            				</div>
+												
+
+

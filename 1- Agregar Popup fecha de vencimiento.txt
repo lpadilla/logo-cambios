@@ -1,0 +1,10 @@
+Agregar Popup fecha de vencimiento
+
+1- Archivo product_list.css
+ lineas 419-458
+
+2- Archivo product-list.tpl
+	lineas 234, 241 hasta la 258
+
+3- ajax-cart.js
+	funcion overrideButtonsInThePage esta funcion esta aprox en la linea 142 del archivo

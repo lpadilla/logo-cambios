@@ -1,0 +1,21 @@
+Cambios hechos para agregar la fecha de vencimiento de los productos en el backoffice Orden
+
+Archivo OrderDetail.php (Classes)
+cambios linea 187, 648
+
+view.tpl 
+Agregar la fila en la tabla (titulo)
+
+
+_product_line.tpl 
+Agregar la fila en la tabla (valor)
+linea 59-65 
+cambiar 
+$product.due_date por $product.product_due_date
+
+Cart.php 
+linea 532 -> agregar p.due_date al query
+
+
+
+ALTER TABLE `ps_order_detail` ADD product_due_date varchar(10)

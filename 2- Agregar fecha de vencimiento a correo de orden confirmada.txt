@@ -1,0 +1,25 @@
+
+Archivos 
+Order_config_product_list.tpl -> ubicado en root/mails/en
+	Se agregó el codigo luego de Td para el nombre:
+	<td style="border:1px solid #D6D4D4;">
+		<table class="table">
+			<tr>
+				<td width="10">&nbsp;</td>
+				<td>
+					<font size="2" face="Open-sans, sans-serif" color="#555454">
+						<strong>{$product['due_date']}</strong>
+					</font>
+				</td>
+				<td width="10">&nbsp;</td>
+			</tr>
+		</table>
+	</td>
+Order_conf.tpl -> ubicado en cada theme /mails/es
+	Se agregó esté codigo:
+	<th style="border: 1px solid #D6D4D4; background-color: #fbfbfb; color: #333; font-family: Arial; font-size: 13px; padding: 10px;" bgcolor="#f8f8f8">Fecha de Vencimiento</th>
+
+Archivo PaymentModule.php
+	Se agregó fecha de vencimiento antes de llamar a envio del mail.
+	Siguiente codigo, aprox linea 493
+	'due_date' => $product['due_date'] luego de 'customization' => array(),

@@ -1,0 +1,184 @@
+8- Filtros de intolerancias y alergías
+
+
+Front office: 
+	1- Se creo el modulo intoleracias_alergias para vistas y controladores
+	2. Agregar codigo en archivo js global de cada tienda (cualquier js que cargue en todo el sitio)
+		LOGO: public_html/test/themes/default-bootstrap/js/global.js (linea 113)
+		buscar uno en templates de Atuhogar y foodies
+
+		y agregar este codigo en cualquier "readyfunction"
+
+		$( "#select_allergy input:checkbox" ).click(function() {
+		  	var id_allergy = $(this).attr('id');
+
+		  	var allergy_selected = $("#allergy_selected").val();
+
+
+		  	if(allergy_selected == ""){
+		  		$("#allergy_selected").val(id_allergy);
+		  	}else{
+			  	var res = allergy_selected.split(",");
+		  		if($.inArray(id_allergy, res) == -1){
+			  		res.push(id_allergy);
+			  		
+		  		}else{
+		  			res.splice( $.inArray(id_allergy, res), 1 );
+		  		}
+		  		res.join(',')
+			  	$("#allergy_selected").val(res);
+		  	}
+		});
+
+
+Backoffice:
+
+	1. Se creo el archivo allergy.tpl para  mostrar el formulario para seleccionar
+	ruta: /panel/themes/default/template/controllers/products/allergy.tpl
+
+	2. Editar el archivo AdminProductsController para agregar la logica en el tab de producto
+
+		- En la variable: $this->available_tabs_lang aprox linea 91 del archivo agregar al final de esta
+			'Allergy' => $this->l('Intolerancias y Alergías'),
+		- En la variable: $this->available_tabs aprox linea 112 del archivo agregar al final de esta
+			'Allergy' => 15,
+		- Agregar function processAllergies para procesar el post del form en TEST aprox linea 3185 (luego de processSuplier)
+			/**
+		    * Post treatment for Allergies
+		    */
+		    public function processAllergies()
+		    {
+		        if (Validate::isLoadedObject($product = new Product((int)Tools::getValue('id_product')))) {
+		            // Get all id_product_attribute
+		            $attributes = $product->getAttributesResume($this->context->language->id);
+		            if (empty($attributes)) {
+		                $attributes[] = array(
+		                    'id_product_attribute' => 0,
+		                    'attribute_designation' => ''
+		                );
+		            }
+
+		            $query = new DbQuery();
+		            $query->select('ia.*');
+		            $query->from('intolerance_allergy', 'ia');
+		            $query->groupBy('ia.id');
+		    
+		            $intolerances_allergy = Db::getInstance(_PS_USE_SQL_SLAVE_)->executeS($query);
+
+		            // Get new associations
+		            $count = 0;
+		            $insert = "INSERT INTO `ps_product_intolerance_allergy` (`id_product`, `id_lang`, `id_shop`, `id_intolerance_allergy`) VALUES";
+		            foreach ($intolerances_allergy as $intolerance) {
+		                if (Tools::isSubmit('check_allergy_'.$intolerance['id'])) {
+		                    if($count>0){$insert .=",";}
+		                    $insert .= " (".$product->id.", ".$this->context->language->id.", ".Context::getContext()->shop->id.", ".$intolerance['id'].")";
+		                     
+		                    $count ++;
+		                }
+		            }
+		            
+		            //Delete asociaciones anteriores
+		            $delete = 'DELETE FROM `'._DB_PREFIX_.'product_intolerance_allergy` WHERE `id_product` = '.$product->id;
+		            Db::getInstance()->execute($delete);
+		            
+		            //Insert los nuevos seleccionados si hay alguno asociado
+		            if($count>0){
+		                Db::getInstance()->execute($insert);
+		            }
+		        }
+		    }
+
+		- Agregar funtion initFormAllergy para mostrar el form en TEST aprox linea 4939 (luego de intiFormSuppliers)
+			/**
+		     * @param Product $obj
+		     * @throws Exception
+		     * @throws SmartyException
+		     */
+		    public function initFormAllergy($obj)
+		    {
+		        $data = $this->createTemplate($this->tpl_form);
+
+		        if ($obj->id) {
+		            if ($this->product_exists_in_shop) {
+		                // Get all id_product_attribute
+		                $attributes = $obj->getAttributesResume($this->context->language->id);
+		                if (empty($attributes)) {
+		                    $attributes[] = array(
+		                        'id_product' => $obj->id,
+		                        'id_product_attribute' => 0,
+		                        'attribute_designation' => ''
+		                    );
+		                }
+
+		                $product_designation = array();
+
+		                foreach ($attributes as $attribute) {
+		                    $product_designation[$attribute['id_product_attribute']] = rtrim(
+		                        $obj->name[$this->context->language->id].' - '.$attribute['attribute_designation'],
+		                        ' - '
+		                    );
+		                }
+		                
+		                // Get all available intolerances
+		                //$intolerances = Allergy::getIntoleranceAllergy();
+		                
+		                $query = new DbQuery();
+		                $query->select('ia.*');
+		                $query->from('intolerance_allergy', 'ia');
+		                $query->groupBy('ia.id');
+		                
+		        
+		                $intolerance_allergy = Db::getInstance(_PS_USE_SQL_SLAVE_)->executeS($query);
+		                if ($intolerance_allergy === false) {
+		                    return false;
+		                }else{
+		                    $intolerances = array();
+		                    foreach ($intolerance_allergy as $key => $value) {
+		                        $intolerances[$value['id']] = array(
+		                            'id' => $value['id'],
+		                            'intolerance_allergy' => $value['intolerance_allergy']);
+		                    }
+		                }
+
+		                // Get already associated intolerances
+		                //$intolerances_product = Allergy::getIntoleranceAllergyProduct($obj->id);
+		                
+		                
+		                $intolerance_product = array();
+		                $sql_allergy = 'SELECT ia.id
+		                        FROM ps_intolerance_allergy ia
+		                        JOIN ps_product_intolerance_allergy pia ON (ia.id= pia.id_intolerance_allergy)
+		                        WHERE pia.id_product = '.$obj->id.'
+		                              AND pia.id_lang = '.$this->context->language->id.'
+		                              AND pia.id_shop = '.Context::getContext()->shop->id;
+		                $intolerances_product = Db::getInstance(_PS_USE_SQL_SLAVE_)->executeS($sql_allergy);
+		        
+		                foreach ($intolerances_product as $key => $value) {
+		                    $intolerance_product[$value['id']] = "true";
+		                }
+		                
+
+		                for ($i=1; $i <= count($intolerances) ; $i++) { 
+		                    if (!array_key_exists($i, $intolerance_product)) {
+		                        $intolerance_product[$i] = "false";
+		                    }
+		                }
+
+		                $data->assign(array(
+		                    'attributes' => $attributes,
+		                    'intolerances' => $intolerances,
+		                    'intolerance_product' => $intolerance_product,
+		                    'product' => $obj,
+		                    'link' => $this->context->link,
+		                    'token' => $this->token,
+		                    'id_default_currency' => Configuration::get('PS_CURRENCY_DEFAULT'),
+		                ));
+		            } else {
+		                $this->displayWarning($this->l('You must save the product in this shop before managing suppliers.'));
+		            }
+		        } else {
+		            $this->displayWarning($this->l('You must save this product before managing suppliers.'));
+		        }
+
+		        $this->tpl_form_vars['custom_form'] = $data->fetch();
+		    }

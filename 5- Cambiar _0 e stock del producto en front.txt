@@ -1,0 +1,50 @@
+Cambiar >0 e stock del producto en front
+
+Cambios realizados 
+Archivo Product-list.tpl en la raiz de cada template
+
+	1- Default-boostrap: 
+		Linea 322 (agregue codigo)
+			<span id="quantityAvailable">
+				{if $product->quantity > 1000}
+					1000
+				{else}
+					{if $product->quantity <= 0}
+						0
+					{else}
+						{$product->quantity|intval}
+					{/if}
+				{/if}
+			</span>	
+		Linea 335
+			Cambiar condicion de == 0 a <= 0
+	2- Atuhogar
+		Linea 292 (agregue codigo)
+			<span id="quantityAvailable">
+				{if $product->quantity > 1000}
+					1000
+				{else}
+					{if $product->quantity <= 0}
+						0
+					{else}
+						{$product->quantity|intval}
+					{/if}
+				{/if}
+			</span>	
+		Linea 304
+			Cambiar condicion de == 0 a <= 0
+	3- Foodies
+		Linea 289 (agregue codigo)
+			<span id="quantityAvailable">
+				{if $product->quantity > 1000}
+					1000
+				{else}
+					{if $product->quantity <= 0}
+						0
+					{else}
+						{$product->quantity|intval}
+					{/if}
+				{/if}
+			</span>	
+		Linea 302
+			Cambiar condicion de == 0 a <= 0

@@ -1,0 +1,16 @@
+Se modificó solo el archivo 
+/home/foodycl/public_html/test/pdf/delivery-slip.product-tab.tpl
+
+1- Se agregó el codigo para el nombre de la columna, antes de la columna de nombre de producto
+	<th class="product header small" width="15%">{l s='Fecha de vencimiento' pdf='true'}</th>
+Se cambio el % de la columna producto de 55 a 40
+
+2- En el body de la tabla se agrego el siguiente codigo, antes del nombre del producto
+
+	<td class="product center">				    
+	    {if $order_detail.product_due_date == '0000-00-00'}
+	        --
+	    {else}
+	        {$order_detail.product_due_date}
+	    {/if}
+    </td>
